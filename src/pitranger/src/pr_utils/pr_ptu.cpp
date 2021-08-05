@@ -283,7 +283,7 @@ int PanTiltController::set_pan_deg(int deg) {
 
   // Wait for the motor to move to the new position.
   while (std::abs(deg - get_pan_deg()) > PTU_PAN_EPSILON_DEG) {
-    //fmt::print("Pan: {}\n", get_pan_deg());
+    fmt::print("Pan: {}\n", get_pan_deg());
     pr::time::msleep(100);
   }
   return deg;
