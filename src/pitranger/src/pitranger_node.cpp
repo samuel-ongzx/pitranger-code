@@ -2,6 +2,7 @@
 #include <ros/ros.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/Float32MultiArray.h>
 #include <fmt/format.h>
 
 double rpm_to_rad_per_sec(const double rpm) {
@@ -24,15 +25,19 @@ int main(int argc, char** argv) {
   auto wheel_cb = [&wheels, wheel_diam_m, wheel_spacing_m]
     (const geometry_msgs::TwistConstPtr& msg) {
     try {
-      double lin = msg->linear.x;
-      double ang = msg->angular.z;
+      double lin = msg->linear.x;   // m/s
+      double ang = msg->angular.z;  // rad/s
 
       double v_delta = std::tan(ang)*wheel_spacing_m;
       double l_mps = lin - v_delta/2.0;
       double r_mps = lin + v_delta/2.0;
 
-      wheels.set_left_rpm(l_mps * 60.0 / wheel_diam_m);
-      wheels.set_right_rpm(r_mps * 60.0 / wheel_diam_m);
+      double l_rpm = (l_mps / (wheel_diam_m / 2.0)) * (60.0 / (2.0 * M_PI));    // rad/s -> rpm
+      double r_rpm = (r_mps / (wheel_diam_m / 2.0)) * (60.0 / (2.0 * M_PI));    // rad/s -> rpm
+      wheels.set_left_rpm(l_rpm);
+      wheels.set_right_rpm(r_rpm);
+      // wheels.set_left_rpm(l_mps * 60.0 / wheel_diam_m);
+      // wheels.set_right_rpm(r_mps * 60.0 / wheel_diam_m);
     } catch(const std::exception& e) {
       fmt::print("WARN: pitranger node failed to set motor velocities.\n");
     }
@@ -41,6 +46,9 @@ int main(int argc, char** argv) {
 
   // Create a publisher for the wheel odometry.
   auto wheel_odom_pub = nh.advertise<nav_msgs::Odometry>("/pitranger/out/wheel_odom", 100);
+
+  // Create a publisher for the encoders.
+  auto encoder_pub = nh.advertise<std_msgs::Float32MultiArray>("/pitranger/out/encoders", 100);
 
   // Track the robot state in x,y,yaw.
   double robot_x   = 0.0;
@@ -75,6 +83,14 @@ int main(int argc, char** argv) {
       const double  v_left_mps =  left_rps*wheel_radius_m;
       const double v_right_mps = right_rps*wheel_radius_m;
       const double v_mps = (v_left_mps + v_right_mps) / 2.0;
+
+      // Construct encoder message & populate it.
+      std_msgs::Float32MultiArray enc_msg;
+      enc_msg.data.push_back(dt);
+      enc_msg.data.push_back(fl_rpm * pr::WHEELS_MOTOR_GEAR_RATIO); // Encoder Ticks 
+      enc_msg.data.push_back(fr_rpm * pr::WHEELS_MOTOR_GEAR_RATIO);
+      enc_msg.data.push_back(rl_rpm * pr::WHEELS_MOTOR_GEAR_RATIO);
+      enc_msg.data.push_back(rr_rpm * pr::WHEELS_MOTOR_GEAR_RATIO);
 
       // Calculate velocity of robot in x,y,yaw.
       const double vx = std::cos(robot_yaw) * v_mps;
@@ -132,6 +148,7 @@ int main(int argc, char** argv) {
       msg.twist.covariance[4*6+4] = 1000.0;     // Pitch-to-Pitch
       msg.twist.covariance[5*6+5] = 0.3;        // Yaw-to-Yaw
 
+      encoder_pub.publish(enc_msg);
       wheel_odom_pub.publish(msg);
     } catch (const std::exception& e) {
       fmt::print("WARNING: {}", e.what());
