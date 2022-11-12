@@ -44,7 +44,7 @@ constexpr double PTU_PAN_CENTER_DEG         =   0.0;
 constexpr double PTU_PAN_MAX_DEG            =  67.0;
 
 constexpr int    PTU_PAN_MOTOR_RPM          = 50;
-constexpr double PTU_PAN_PID[]              = {3.0, 0.1, 1.6};
+constexpr double PTU_PAN_PID[]              = {3.0, 0.0, 0.0};
 constexpr int    PTU_PAN_DEFAULT_CMD        = PTU_PAN_ENCODER_MIN;
 constexpr int    PTU_PAN_CHANNEL            = 2;
 

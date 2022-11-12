@@ -17,7 +17,6 @@ find_package(catkin REQUIRED COMPONENTS
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE STRING "Modules for CMake" FORCE)
 
 ## System dependencies are found with CMake's conventions
-find_package(Spinnaker REQUIRED)
 find_package(fmt REQUIRED)
 find_package(Eigen3 REQUIRED)
 
@@ -96,7 +95,6 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(
   ${catkin_INCLUDE_DIRS}
-  ${Spinnaker_INCLUDE_DIRS}
   src/
   libs/stb/
 )
@@ -119,20 +117,6 @@ add_executable(pitranger_node
 
 add_subdirectory(libs/roboteq)
 
-add_executable(pitcam_util
-  src/pitcam_util.cpp
-  src/pr_utils/pr_pitcam.cpp
-  src/pr_utils/pr_ptu.cpp
-)
-target_link_libraries(pitcam_util roboteq fmt ${Spinnaker_LIBRARIES})
-
-## Declare a C++ executable
-add_executable(pitcam_node
-  src/pitcam_node.cpp
-  src/pr_utils/pr_ptu.cpp
-  src/pr_utils/pr_pitcam.cpp
-)
-
 ## Rename C++ executable without prefix
 set_target_properties(pitranger_node PROPERTIES OUTPUT_NAME pitranger PREFIX "")
 set_target_properties(pitcam_node PROPERTIES OUTPUT_NAME pitcam PREFIX "")
@@ -151,7 +135,6 @@ target_link_libraries(pitranger_node
 )
 target_link_libraries(pitcam_node
   ${catkin_LIBRARIES}
-  ${Spinnaker_LIBRARIES}
   roboteq
   fmt
   stdc++fs

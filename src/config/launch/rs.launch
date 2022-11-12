@@ -26,7 +26,7 @@
 
   <group ns="rs_back">
     <include file="$(find realsense2_camera)/launch/rs_camera.launch">
-      <arg name="serial_no"             value="841612070485"/>
+      <arg name="serial_no"             value="912112071589"/>
       <arg name="tf_prefix"         		value="rs_back"/>
       <arg name="align_depth"           value="true"/>
       <arg name="ordered_pc"            value="true"/>
@@ -45,7 +45,6 @@
       <arg name="color_width"           value="1280"/>
       <arg name="color_height"          value="720"/>
     </include>
-
   </group>
 
 </launch>

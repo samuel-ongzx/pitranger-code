@@ -28,8 +28,8 @@ int main(int argc, char** argv) {
   }
 
   auto image = cam.capture(exposure);
-  std::cout << "Pan:  " << pan << '\n';
-  std::cout << "Tilt: " << tilt << '\n';
+  std::cout << "Pan:  " << ptu.get_pan_deg() << '\n';
+  std::cout << "Tilt: " << ptu.get_tilt_deg() << '\n';
   std::cout << "Exposure: " << cam.get_exposure() << '\n';
 
   if( argc == 5 ) {

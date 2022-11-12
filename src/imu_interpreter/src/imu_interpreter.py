@@ -1,22 +1,26 @@
 #!/usr/bin/env python
 import rospy
 import numpy as np
-from sensor_msgs.msg import Imu
+from nav_msgs.msg import Odometry
 from tf.transformations import euler_from_quaternion
 
 
 def callback(msg):
-    qx = msg.orientation.x;
-    qy = msg.orientation.y;
-    qz = msg.orientation.z;
-    qw = msg.orientation.w;
+    qx = msg.pose.pose.orientation.x;
+    qy = msg.pose.pose.orientation.y;
+    qz = msg.pose.pose.orientation.z;
+    qw = msg.pose.pose.orientation.w;
     roll, pitch, yaw = euler_from_quaternion([qx, qy, qz, qw])
-    print("Roll: {:.3f} Pitch: {:.3f} Yaw: {:.3f}".format(roll * 180.0/np.pi, pitch * 180.0/np.pi, yaw * 180.0/np.pi))
+
+    x = msg.pose.pose.position.x
+    y = msg.pose.pose.position.y
+    z = msg.pose.pose.position.z
+    print("{:.3f}, {:.3f}, {:.3f}".format(x, y, yaw * 180.0/np.pi))
 
 if __name__=="__main__":
     rospy.init_node('imu_interpreter')
 
-    sub = rospy.Subscriber('imu/data', Imu, callback)
+    sub = rospy.Subscriber('whereami/odom', Odometry, callback)
 
     rospy.spin()
 
