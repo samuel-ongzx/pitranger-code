@@ -1,7 +1,6 @@
 #ifndef __RoboteqDevice_H_
 #define __RoboteqDevice_H_
 
-#include "ErrorCodes.h"
 #include <string>
 
 std::string ReplaceString(std::string source, std::string find, std::string replacement);

@@ -1,24 +1,31 @@
-#include "RoboteqDevice.h"
-#include "Constants.h"
-#include "ErrorCodes.h"
-
+#include <iostream>
 #include <stdio.h>
 #include <string>
 #include <fcntl.h>
 #include <errno.h>
 #include <time.h>
 #include <sstream>
+
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
+#ifdef linux
 #include <termios.h>
 #include <unistd.h>
-#include <iostream>
+#endif
+
+#include "RoboteqDevice.h"
+#include "ErrorCodes.h"
 
 using namespace std;
-using namespace roboteq;
+
+#if _MSC_VER >= 1700 //Visual Studio 2012 or later
+#define sprintf sprintf_s
+#endif
 
 #define BUFFER_SIZE 1024
 #define MISSING_VALUE -1024
-
-#define ROBOTEQ_TIMEOUT_MS 5
 
 RoboteqDevice::RoboteqDevice()
 {
@@ -102,7 +109,7 @@ int RoboteqDevice::SetConfig(int configItem, int index, int value)
 	if(index < 0)
 		return RQ_INDEX_OUT_RANGE;
 
-	int status = IssueCommand("^", command, args, ROBOTEQ_TIMEOUT_MS, response, true);
+	int status = IssueCommand("^", command, args, 10, response, true);
 	if(status != RQ_SUCCESS)
 		return status;
 	if(response != "+")
@@ -133,7 +140,10 @@ int RoboteqDevice::SetCommand(int commandItem, int index, int value)
 		index = 0;
 	}
 
-	int status = IssueCommand("!", command, args, ROBOTEQ_TIMEOUT_MS, response, true);
+	if(index < 0)
+		return RQ_INDEX_OUT_RANGE;
+
+	int status = IssueCommand("!", command, args, 10, response, true);
 	if(status != RQ_SUCCESS)
 		return status;
 	if(response != "+")
@@ -165,7 +175,7 @@ int RoboteqDevice::GetConfig(int configItem, int index, int &result)
 	sprintf(command, "$%02X", configItem);
 	sprintf(args, "%i", index);
 
-	int status = IssueCommand("~", command, args, ROBOTEQ_TIMEOUT_MS, response);
+	int status = IssueCommand("~", command, args, 10, response);
 	if(status != RQ_SUCCESS)
 		return status;
 
@@ -197,7 +207,7 @@ int RoboteqDevice::GetValue(int operatingItem, int index, int &result)
 	sprintf(command, "$%02X", operatingItem);
 	sprintf(args, "%i", index);
 
-	int status = IssueCommand("?", command, args, ROBOTEQ_TIMEOUT_MS, response);
+	int status = IssueCommand("?", command, args, 10, response);
 	if(status != RQ_SUCCESS)
 		return status;
 
@@ -226,26 +236,163 @@ string ReplaceString(string source, string find, string replacement)
 	return source;
 }
 
+#ifdef _WIN32
 int RoboteqDevice::Connect(string port)
 {
 	if (IsConnected())
 	{
+		cout << "Device is connected, attempting to disconnect." << endl;
 		Disconnect();
 	}
 
 	//Open port.
-	handle = open(port.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
-	if (handle == RQ_INVALID_HANDLE)
+	cout << "Opening port: '" << port << "'...";
+	HANDLE h = CreateFileA(port.c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	handle = (int)h;
+	if (h == INVALID_HANDLE_VALUE)
 	{
+		handle = RQ_INVALID_HANDLE;
+		cout << "failed." << endl;
 		return RQ_ERR_OPEN_PORT;
 	}
 
+	cout << "succeeded." << endl;
+
+	cout << "Initializing port...";
+	InitPort();
+	cout << "...done." << endl;
+
+	int status;
+	string response;
+	cout << "Detecting device version...";
+	status = IssueCommand("?", "$1E", 10, response);
+	//status = IssueCommand("?", "FID", 10, response);
+	if (status != RQ_SUCCESS)
+	{
+		cout << "failed (issue ?$1E response: " << status << ")." << endl;
+		Disconnect();
+		return RQ_UNRECOGNIZED_DEVICE;
+	}
+
+	if (response.length() < 12)
+	{
+		cout << "failed (unrecognized version)." << endl;
+		Disconnect();
+		return RQ_UNRECOGNIZED_VERSION;
+	}
+
+	cout << response.substr(8, 4) << "." << endl;
+	return RQ_SUCCESS;
+}
+void RoboteqDevice::Disconnect()
+{
+	if (IsConnected())
+		CloseHandle((HANDLE)handle);
+
+	handle = RQ_INVALID_HANDLE;
+}
+void RoboteqDevice::InitPort()
+{
+	if (!IsConnected())
+		return;
+
+	DCB          comSettings;
+	COMMTIMEOUTS CommTimeouts;
+
+	// Set timeouts in milliseconds
+	CommTimeouts.ReadIntervalTimeout = 0;
+	CommTimeouts.ReadTotalTimeoutMultiplier = 0;
+	CommTimeouts.ReadTotalTimeoutConstant = 100;
+	CommTimeouts.WriteTotalTimeoutMultiplier = 0;
+	CommTimeouts.WriteTotalTimeoutConstant = 100;
+	SetCommTimeouts((HANDLE)handle, &CommTimeouts);
+
+	// Set Port parameters.
+	// Make a call to GetCommState() first in order to fill
+	// the comSettings structure with all the necessary values.
+	// Then change the ones you want and call SetCommState().
+	GetCommState((HANDLE)handle, &comSettings);
+	comSettings.BaudRate = 115200;
+	comSettings.StopBits = ONESTOPBIT;
+	comSettings.ByteSize = 8;
+	comSettings.Parity = NOPARITY;
+	comSettings.fParity = FALSE;
+	SetCommState((HANDLE)handle, &comSettings);
+}
+int RoboteqDevice::Write(string str)
+{
+	if (!IsConnected())
+		return RQ_ERR_NOT_CONNECTED;
+
+	//cout<<"Writing: "<<ReplaceString(str, "\r", "\r\n");
+	DWORD written = 0;
+	int bStatus = WriteFile((HANDLE)handle, str.c_str(), str.length(), &written, NULL);
+	if (bStatus == 0)
+		return RQ_ERR_TRANSMIT_FAILED;
+
+	return RQ_SUCCESS;
+}
+int RoboteqDevice::ReadAll(string &str)
+{
+	DWORD countRcv;
+	if (!IsConnected())
+		return RQ_ERR_NOT_CONNECTED;
+
+	char buf[BUFFER_SIZE + 1] = "";
+
+	str = "";
+	int i = 0;
+
+	while (ReadFile((HANDLE)handle, buf, BUFFER_SIZE, &countRcv, NULL) != 0)
+	{
+		str.append(buf, countRcv);
+
+		//No further data.
+		if (countRcv < BUFFER_SIZE)
+			break;
+	}
+
+	//if(countRcv > 0)
+	//{
+	//	str.append(buf, countRcv);
+	//}
+
+	return RQ_SUCCESS;
+}
+void sleepms(int milliseconds)
+{
+	Sleep(milliseconds);
+}
+#endif
+
+#ifdef linux
+int RoboteqDevice::Connect(string port)
+{
+	if (IsConnected())
+	{
+		cout << "Device is connected, attempting to disconnect." << endl;
+		Disconnect();
+	}
+
+	//Open port.
+	cout << "Opening port: '" << port << "'...";
+	handle = open(port.c_str(), O_RDWR | O_NOCTTY | O_NDELAY);
+	if (handle == RQ_INVALID_HANDLE)
+	{
+		cout << "failed." << endl;
+		return RQ_ERR_OPEN_PORT;
+	}
+
+	cout << "succeeded." << endl;
 	fcntl(handle, F_SETFL, O_APPEND | O_NONBLOCK & ~FNDELAY);
 
+	cout << "Initializing port...";
 	InitPort();
+	cout << "...done." << endl;
 
 	int status, i;
 	string response;
+	cout << "Detecting device version...";
 
 	for (i = 0; i < 5; i++)
 	{
@@ -256,19 +403,21 @@ int RoboteqDevice::Connect(string port)
 
 	if (status != RQ_SUCCESS)
 	{
+		cout << "failed (issue ?$1E response: " << status << ")." << endl;
 		Disconnect();
 		return RQ_UNRECOGNIZED_DEVICE;
 	}
 
 	if (response.length() < 12)
 	{
+		cout << "failed (unrecognized version)." << endl;
 		Disconnect();
 		return RQ_UNRECOGNIZED_VERSION;
 	}
 
+	cout << response.substr(8, 4) << "." << endl;
 	return RQ_SUCCESS;
 }
-
 void RoboteqDevice::Disconnect()
 {
 	if (IsConnected())
@@ -309,8 +458,7 @@ void RoboteqDevice::InitPort()
 	newtio.c_cflag &= ~PARODD;		/* Select the Even Parity (Disabled) through Control options*/
 	newtio.c_cflag &= ~CSTOPB;		/*Set number of Stop Bits to 1*/
 
-	// Timeout Parameters.
-    // Set to 0 characters (VMIN) and 10 second (VTIME) timeout. This was done to prevent the read call from blocking indefinitely.*/
+									//Timout Parameters. Set to 0 characters (VMIN) and 10 second (VTIME) timeout. This was done to prevent the read call from blocking indefinitely.*/
 	newtio.c_cc[VMIN] = 0;
 	newtio.c_cc[VTIME] = 100;
 
@@ -323,6 +471,7 @@ int RoboteqDevice::Write(string str)
 	if (!IsConnected())
 		return RQ_ERR_NOT_CONNECTED;
 
+	//cout<<"Writing: "<<ReplaceString(str, "\r", "\r\n");
 	int countSent = write(handle, str.c_str(), str.length());
 
 	//Verify weather the Transmitting Data on UART was Successful or Not
@@ -360,8 +509,8 @@ int RoboteqDevice::ReadAll(string &str)
 
 	return RQ_SUCCESS;
 }
-
 void sleepms(int milliseconds)
 {
-	usleep(milliseconds * 1000);
+	usleep(milliseconds / 1000);
 }
+#endif

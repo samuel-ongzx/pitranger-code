@@ -1,16 +1,44 @@
 #pragma once
 #include <Roboteq.h>
 #include <thread>
+#include <vector>
+
+#define RQ_SUCCESS      0
+
+#define _MOTCMD			1
+#define _MOTVEL			3
+#define _F				19
+#define _CNOD			87
+
+#define _MOTAMPS		0
+#define _RWD			8
+#define _CLERD			56
+
+#define _KP				46
+#define _KI				47
+#define _KD				48
+
+#define _MAC			51
+#define _MDEC			52
+
+#define _MMOD			39
+#define _EMOD			73
+#define _EPPR			74
+#define _MXRPM			54
+
+#define _ABSPEED		3
+#define _RELCNTR		8
+#define _ABCNTR         4
 
 namespace pr {
 
 constexpr int WHEELS_LEFT_ROBOTEQ_CAN_ID  = 1;
-constexpr int WHEELS_RIGHT_ROBOTEQ_CAN_ID = 3;
+constexpr int WHEELS_RIGHT_ROBOTEQ_CAN_ID = 4;
 
 constexpr int WHEELS_RIGHT_FRONT_CHANNEL = 1;
 constexpr int WHEELS_RIGHT_REAR_CHANNEL = 2;
-constexpr int WHEELS_LEFT_FRONT_CHANNEL = 1;
-constexpr int WHEELS_LEFT_REAR_CHANNEL = 2;
+constexpr int WHEELS_LEFT_FRONT_CHANNEL = 2;
+constexpr int WHEELS_LEFT_REAR_CHANNEL = 1;
 
 constexpr int WHEELS_ENCODER_PPR = 7;
 constexpr int WHEELS_MAX_WHEEL_RPM = 36;
@@ -45,11 +73,25 @@ class WheelController {
         int get_rear_right_encoder();
         int get_rear_left_encoder();
 
+        std::vector<int> get_rpm();
+        std::vector<int> get_abs_encs();
+        std::vector<int> get_rel_encs();
+
     private:
         double fr_rpm = 0.0;
         double fl_rpm = 0.0;
         double rr_rpm = 0.0;
         double rl_rpm = 0.0;
+
+        int _abs_enc_rl = 0.0;
+        int _abs_enc_rr = 0.0;
+        int _abs_enc_fl = 0.0;
+        int _abs_enc_fr = 0.0;
+
+        int _rel_enc_rl = 0.0;
+        int _rel_enc_rr = 0.0;
+        int _rel_enc_fl = 0.0;
+        int _rel_enc_fr = 0.0;
 
         RoboteqDevice  left;
         RoboteqDevice right;

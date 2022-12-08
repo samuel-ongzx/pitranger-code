@@ -6,8 +6,9 @@
 #include <experimental/filesystem>
 #include <fmt/format.h>
 #include <unordered_map>
+#include <unistd.h> 
 
-using namespace roboteq;
+// using namespace roboteq;
 
 namespace pr {
 
@@ -133,6 +134,7 @@ WheelController::WheelController() {
     set_kp(left, 0.4);
     set_ki(left, 0.1);
     set_kd(left, 0.0);
+    std::cout << "Set Left Motor Params" << std::endl;
   }
 
   // Configure the Right Roboteq.
@@ -145,6 +147,7 @@ WheelController::WheelController() {
     set_kp(right, 0.4);
     set_ki(right, 0.1);
     set_kd(right, 0.0);
+    std::cout << "Set Right Motor Params" << std::endl;
   }
 }
 
@@ -153,170 +156,307 @@ WheelController::~WheelController() {
     set_right_rpm(0);
 }
 
+// Sends +ve value for forward driving
 double WheelController::set_left_rpm(double rpm) {
-    double fl_rpm = set_front_left_rpm(rpm);
-    double rl_rpm = set_rear_left_rpm(rpm);
-    return rl_rpm;
+    // Left wheels consistently runs slowly than right wheels ~ 1.00 (L) : 1.01 (R) @ 0.07
+    int fl_cmd = pr::clamp<int>(rpm, -2000, 2000);
+    int rl_cmd = pr::clamp<int>(rpm, -2000, 2000);
+
+    int status;
+    status = left.SetCommand(_MOTVEL, WHEELS_LEFT_FRONT_CHANNEL, fl_cmd);
+    sleepms(20);
+    status = left.SetCommand(_MOTVEL, WHEELS_LEFT_REAR_CHANNEL, rl_cmd);
+    sleepms(20);
+    std::cout << "SET LEFT: " << status << "," << fl_cmd << "," << rl_cmd << "\n";
+    if (status != RQ_SUCCESS) {
+      auto msg = fmt::format("Failed to set left wheel RPM to {}.\n", rpm);
+      std::cout << "Status: " << status << ", " << msg << std::endl;
+      throw std::runtime_error(msg);
+    }
 }
+
+// Sends -ve value for forward driving
+// 1000 is about 5cm/s - 11.5s
 double WheelController::set_right_rpm(double rpm) {
-    double fr_rpm = set_front_right_rpm(rpm);
-    double rr_rpm = set_rear_right_rpm(rpm);
-    return rr_rpm;
+    int fr_cmd = pr::clamp<int>(rpm, -2000, 2000);
+    int rr_cmd = pr::clamp<int>(rpm, -2000, 2000);
+
+    int status;
+    status =  right.SetCommand(_MOTVEL, WHEELS_RIGHT_FRONT_CHANNEL, fr_cmd);
+    sleepms(20);
+    status =  right.SetCommand(_MOTVEL, WHEELS_RIGHT_REAR_CHANNEL, rr_cmd);
+    sleepms(20);   
+    std::cout << "SET RIGHT: " << status << "," << fr_cmd << "," << rr_cmd << "\n";
+    if (status != RQ_SUCCESS) {
+      auto msg = fmt::format("Failed to set right wheel RPM to {}.\n", rpm);
+      std::cout << "Status: " << status << ", " << msg << std::endl;
+      throw std::runtime_error(msg);
+    }
 }
 
-double WheelController::set_front_right_rpm(double rpm) {
-  fr_rpm = rpm;
 
-  int fr_cmd = pr::clamp<int>(fr_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
-  int rr_cmd = pr::clamp<int>(rr_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
+std::vector<int> WheelController::get_rpm() {
+  int status;
 
-  int status = right.SetCommand(_MOTCMD, -1 * fr_cmd, -1 * rr_cmd);
-  if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to set front-right wheel RPM to {}.\n", rpm);
-    throw std::runtime_error(msg);
-  }
-
-  return pr::clamp<double>(rpm, -WHEELS_MAX_WHEEL_RPM, WHEELS_MAX_WHEEL_RPM);
-}
-
-double WheelController::set_front_left_rpm(double rpm) {
-  fl_rpm = rpm;
-
-  int fl_cmd = pr::clamp<int>(fl_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
-  int rl_cmd = pr::clamp<int>(rl_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
-
-  int status = left.SetCommand(_MOTCMD, fl_cmd, rl_cmd);
-  if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to set front-left wheel RPM to {}.\n", rpm);
-    throw std::runtime_error(msg);
-  }
-
-  return pr::clamp<double>(rpm, -WHEELS_MAX_WHEEL_RPM, WHEELS_MAX_WHEEL_RPM);
-}
-
-double WheelController::set_rear_right_rpm(double rpm) {
-  rr_rpm = rpm;
-
-  int fr_cmd = pr::clamp<int>(fr_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
-  int rr_cmd = pr::clamp<int>(rr_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
-
-  int status = right.SetCommand(_MOTCMD, -1 * fr_cmd, -1 * rr_cmd);
-  if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to set rear-right wheel RPM to {}.\n", rpm);
-    throw std::runtime_error(msg);
-  }
-
-  return pr::clamp<double>(rpm, -WHEELS_MAX_WHEEL_RPM, WHEELS_MAX_WHEEL_RPM);
-}
-
-double WheelController::set_rear_left_rpm(double rpm) {
-  rl_rpm = rpm;
-
-  int fl_cmd = pr::clamp<int>(fl_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
-  int rl_cmd = pr::clamp<int>(rl_rpm / (double)WHEELS_MAX_WHEEL_RPM * 1000, -1000, 1000);
-
-  int status = left.SetCommand(_MOTCMD, fl_cmd, rl_cmd);
-  if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to set rear-left wheel RPM to {}.\n", rpm);
-    throw std::runtime_error(msg);
-  }
-
-  return pr::clamp<double>(rpm, -WHEELS_MAX_WHEEL_RPM, WHEELS_MAX_WHEEL_RPM);
-}
-
-double WheelController::get_front_right_rpm() {
-  int enc = get_front_right_encoder();
-  return -1 * enc / (double)WHEELS_MOTOR_GEAR_RATIO;
-}
-double WheelController::get_front_left_rpm() {
-  int enc = get_front_left_encoder();
-  return enc / (double)WHEELS_MOTOR_GEAR_RATIO;
-}
-double WheelController::get_rear_right_rpm() {
-  int enc = get_rear_right_encoder();
-  return -1 * enc / (double)WHEELS_MOTOR_GEAR_RATIO;
-}
-double WheelController::get_rear_left_rpm() {
-  int enc = get_rear_left_encoder();
-  return enc / (double)WHEELS_MOTOR_GEAR_RATIO;
-}
-
-int WheelController::get_front_right_encoder() {
-  int pos = 0;
-  int status = right.GetValue(_F, WHEELS_RIGHT_FRONT_CHANNEL, pos);
+  int enc_fr = 0;
+  status = right.GetValue(_ABSPEED, WHEELS_RIGHT_FRONT_CHANNEL, enc_fr);
   if (status != RQ_SUCCESS) {
     auto msg = fmt::format("Failed to get front right wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
     throw std::runtime_error(msg);
   }
-  return pos;
-}
-int WheelController::get_front_left_encoder() {
-  int pos;
-  int status = left.GetValue(_F, WHEELS_LEFT_FRONT_CHANNEL, pos);
-  if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to get front left wheel encoder value.\n");
-    throw std::runtime_error(msg);
-  }
-  return pos;
-}
-int WheelController::get_rear_right_encoder() {
-  int pos;
-  int status = right.GetValue(_F, WHEELS_RIGHT_REAR_CHANNEL, pos);
+  sleepms(10);
+
+  int enc_rr;
+  status = right.GetValue(_ABSPEED, WHEELS_RIGHT_REAR_CHANNEL, enc_rr);
   if (status != RQ_SUCCESS) {
     auto msg = fmt::format("Failed to get rear right wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
     throw std::runtime_error(msg);
   }
-  return pos;
-}
-int WheelController::get_rear_left_encoder() {
-  int pos;
-  int status = left.GetValue(_F, WHEELS_LEFT_REAR_CHANNEL, pos);
+  sleepms(10);
+
+  int enc_fl;
+  status = left.GetValue(_ABSPEED, WHEELS_LEFT_FRONT_CHANNEL, enc_fl);
+  if (status != RQ_SUCCESS) {
+    auto msg = fmt::format("Failed to get front left wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    throw std::runtime_error(msg);
+  }
+  sleepms(10);
+
+  int enc_rl;
+  status = left.GetValue(_ABSPEED, WHEELS_LEFT_REAR_CHANNEL, enc_rl);
   if (status != RQ_SUCCESS) {
     auto msg = fmt::format("Failed to get rear left wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
     throw std::runtime_error(msg);
   }
-  return pos;
+  sleepms(10);
+
+  std::vector<int> encs;
+  encs.push_back(enc_fl);
+  encs.push_back(enc_fr);
+  encs.push_back(enc_rl);
+  encs.push_back(enc_rr);
+
+  return encs;
 }
 
-double WheelController::get_front_right_amps() {
-  int tenth_amps;
-  int status = right.GetValue(_MOTAMPS, WHEELS_RIGHT_FRONT_CHANNEL, tenth_amps);
+
+std::vector<int> WheelController::get_abs_encs() {
+  int status;
+
+  int abs_enc_fr = 0;
+  status = right.GetValue(_ABCNTR, WHEELS_RIGHT_FRONT_CHANNEL, abs_enc_fr);
   if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to get front right current draw.\n");
-    throw std::runtime_error(msg);
+    auto msg = fmt::format("Failed to get front right wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    abs_enc_fr = _abs_enc_fr; // Take prev enc value
   }
-  return tenth_amps/10.0;
+  sleepms(10);
+  _abs_enc_fr = abs_enc_fr;
+
+  int abs_enc_rr;
+  status = right.GetValue(_ABCNTR, WHEELS_RIGHT_REAR_CHANNEL, abs_enc_rr);
+  if (status != RQ_SUCCESS) {
+    auto msg = fmt::format("Failed to get rear right wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    abs_enc_fr = _abs_enc_fr; // Take prev enc value
+  }
+  sleepms(10);
+  _abs_enc_rr = abs_enc_rr;
+
+  int abs_enc_fl;
+  status = left.GetValue(_ABCNTR, WHEELS_LEFT_FRONT_CHANNEL, abs_enc_fl);
+  if (status != RQ_SUCCESS) {
+    auto msg = fmt::format("Failed to get front left wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    abs_enc_fr = _abs_enc_fr; // Take prev enc value
+  }
+  sleepms(10);
+  _abs_enc_fl = abs_enc_fl;
+
+  int abs_enc_rl;
+  status = left.GetValue(_ABCNTR, WHEELS_LEFT_REAR_CHANNEL, abs_enc_rl);
+  if (status != RQ_SUCCESS) {
+    auto msg = fmt::format("Failed to get rear left wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    abs_enc_fr = _abs_enc_fr; // Take prev enc value
+  }
+  sleepms(10);
+  _abs_enc_rl = abs_enc_rl;
+
+  std::vector<int> encs;
+  encs.push_back(abs_enc_fl);
+  encs.push_back(abs_enc_fr);
+  encs.push_back(abs_enc_rl);
+  encs.push_back(abs_enc_rr);
+
+  return encs;
 }
 
-double WheelController::get_front_left_amps() {
-  int tenth_amps;
-  int status = left.GetValue(_MOTAMPS, WHEELS_LEFT_FRONT_CHANNEL, tenth_amps);
+std::vector<int> WheelController::get_rel_encs() {
+  int status;
+
+  int rel_enc_fr = 0;
+  status = right.GetValue(_RELCNTR, WHEELS_RIGHT_FRONT_CHANNEL, rel_enc_fr);
   if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to get front left current draw.\n");
-    throw std::runtime_error(msg);
+    auto msg = fmt::format("Failed to get front right wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    rel_enc_fr = _rel_enc_fr; // use prev value
   }
-  return tenth_amps/10.0;
+  sleepms(10);
+  _rel_enc_fr = rel_enc_fr;
+
+  int rel_enc_rr;
+  status = right.GetValue(_RELCNTR, WHEELS_RIGHT_REAR_CHANNEL, rel_enc_rr);
+  if (status != RQ_SUCCESS) {
+    auto msg = fmt::format("Failed to get rear right wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    rel_enc_rr = _rel_enc_rr; // use prev value
+  }
+  sleepms(10);
+  _rel_enc_rr = rel_enc_rr;
+
+  int rel_enc_fl;
+  status = left.GetValue(_RELCNTR, WHEELS_LEFT_FRONT_CHANNEL, rel_enc_fl);
+  if (status != RQ_SUCCESS) {
+    auto msg = fmt::format("Failed to get front left wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    rel_enc_fl = _rel_enc_fl; // use prev value
+  }
+  sleepms(10);
+  _rel_enc_fl = rel_enc_fl;
+
+  int rel_enc_rl;
+  status = left.GetValue(_RELCNTR, WHEELS_LEFT_REAR_CHANNEL, rel_enc_rl);
+  if (status != RQ_SUCCESS) {
+    auto msg = fmt::format("Failed to get rear left wheel encoder value.\n");
+    std::cout << "Status: " << status << ", " << msg << std::endl;
+    // throw std::runtime_error(msg);
+    rel_enc_rl = _rel_enc_rl; // use prev value
+  }
+  sleepms(10);
+  _rel_enc_rl = rel_enc_rl;
+
+  std::vector<int> encs;
+  encs.push_back(rel_enc_fl);
+  encs.push_back(rel_enc_fr);
+  encs.push_back(rel_enc_rl);
+  encs.push_back(rel_enc_rr);
+
+  return encs;
 }
 
-double WheelController::get_rear_right_amps() {
-  int tenth_amps;
-  int status = right.GetValue(_MOTAMPS, WHEELS_RIGHT_REAR_CHANNEL, tenth_amps);
-  if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to get rear right current draw.\n");
-    throw std::runtime_error(msg);
-  }
-  return tenth_amps/10.0;
-}
+// double WheelController::get_front_right_rpm() {
+//   int enc = get_front_right_encoder();
+//   return -1 * enc / (double)WHEELS_MOTOR_GEAR_RATIO;
+// }
+// double WheelController::get_front_left_rpm() {
+//   int enc = get_front_left_encoder();
+//   return enc / (double)WHEELS_MOTOR_GEAR_RATIO;
+// }
+// double WheelController::get_rear_right_rpm() {
+//   int enc = get_rear_right_encoder();
+//   return -1 * enc / (double)WHEELS_MOTOR_GEAR_RATIO;
+// }
+// double WheelController::get_rear_left_rpm() {
+//   int enc = get_rear_left_encoder();
+//   return enc / (double)WHEELS_MOTOR_GEAR_RATIO;
+// }
 
-double WheelController::get_rear_left_amps() {
-  int tenth_amps;
-  int status = left.GetValue(_MOTAMPS, WHEELS_LEFT_REAR_CHANNEL, tenth_amps);
-  if (status != RQ_SUCCESS) {
-    auto msg = fmt::format("Failed to get rear left current draw.\n");
-    throw std::runtime_error(msg);
-  }
-  return tenth_amps/10.0;
-}
+// int WheelController::get_front_right_encoder() {
+//   int pos = 0;
+//   int status = right.GetValue(_F, WHEELS_RIGHT_FRONT_CHANNEL, pos);
+//   sleepms(20);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get front right wheel encoder value.\n");
+//     std::cout << "Status: " << status << ", " << msg << std::endl;
+//     throw std::runtime_error(msg);
+//   }
+//   return pos;
+// }
+// int WheelController::get_front_left_encoder() {
+//   int pos;
+//   int status = left.GetValue(_F, WHEELS_LEFT_FRONT_CHANNEL, pos);
+//   sleepms(20);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get front left wheel encoder value.\n");
+//     std::cout << "Status: " << status << ", " << msg << std::endl;
+//     throw std::runtime_error(msg);
+//   }
+//   return pos;
+// }
+// int WheelController::get_rear_right_encoder() {
+//   int pos;
+//   int status = right.GetValue(_F, WHEELS_RIGHT_REAR_CHANNEL, pos);
+//   sleepms(20);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get rear right wheel encoder value.\n");
+//     std::cout << "Status: " << status << ", " << msg << std::endl;
+//     throw std::runtime_error(msg);
+//   }
+//   return pos;
+// }
+// int WheelController::get_rear_left_encoder() {
+//   int pos;
+//   int status = left.GetValue(_F, WHEELS_LEFT_REAR_CHANNEL, pos);
+//   sleepms(20);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get rear left wheel encoder value.\n");
+//     std::cout << "Status: " << status << ", " << msg << std::endl;
+//     throw std::runtime_error(msg);
+//   }
+//   return pos;
+// }
+
+// double WheelController::get_front_right_amps() {
+//   int tenth_amps;
+//   int status = right.GetValue(_MOTAMPS, WHEELS_RIGHT_FRONT_CHANNEL, tenth_amps);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get front right current draw.\n");
+//     throw std::runtime_error(msg);
+//   }
+//   return tenth_amps/10.0;
+// }
+
+// double WheelController::get_front_left_amps() {
+//   int tenth_amps;
+//   int status = left.GetValue(_MOTAMPS, WHEELS_LEFT_FRONT_CHANNEL, tenth_amps);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get front left current draw.\n");
+//     throw std::runtime_error(msg);
+//   }
+//   return tenth_amps/10.0;
+// }
+
+// double WheelController::get_rear_right_amps() {
+//   int tenth_amps;
+//   int status = right.GetValue(_MOTAMPS, WHEELS_RIGHT_REAR_CHANNEL, tenth_amps);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get rear right current draw.\n");
+//     throw std::runtime_error(msg);
+//   }
+//   return tenth_amps/10.0;
+// }
+
+// double WheelController::get_rear_left_amps() {
+//   int tenth_amps;
+//   int status = left.GetValue(_MOTAMPS, WHEELS_LEFT_REAR_CHANNEL, tenth_amps);
+//   if (status != RQ_SUCCESS) {
+//     auto msg = fmt::format("Failed to get rear left current draw.\n");
+//     throw std::runtime_error(msg);
+//   }
+//   return tenth_amps/10.0;
+// }
 
 void WheelController::disable_watchdog(RoboteqDevice &dev) {
   int status = dev.SetConfig(_RWD, 0);

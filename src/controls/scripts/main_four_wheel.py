@@ -10,13 +10,29 @@ yaw_rate = 0.0
 publish_rate = 1
 
 max_body_vel = 0.05
-max_yaw_rate = 0.08
+max_yaw_rate = 0.05
 max_publish_rate = 10
+
+# KM stuff
+width = 0.30
+length = 0.2222
+height = 0.0745
+radius = 0.0955
+vxl = 0.0
+vxr = 0.0
 
 def talker():
     pub = rospy.Publisher('/pitranger/in/twist_cmd', Twist, queue_size=10)
     rospy.init_node('pr_control_node', anonymous=True)
     rate = rospy.Rate(publish_rate) # 10hz
+
+    # Initialise KM
+    model = FourWheel(
+            width, length, height,
+            radius, vxl, vxr)
+
+    # 1m radius, yaw rate = 0.05, body-vel = 0.05
+    
 
     while not rospy.is_shutdown():
         msg = Twist()
